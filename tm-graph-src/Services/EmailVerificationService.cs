@@ -9,7 +9,7 @@ using tm_graph.Types;
 namespace tm_graph_src.Services;
 
 public class EmailVerificationService(
-    EmailService emailService,
+    IEmailService emailService,
     ITypedCache<(string sessionHash, string codeHash, EmailVerificationReason reason), User> pendingUsers,
     ITypedSet<PendingEmail> pendingEmails,
     ITypedSet<PendingUsername> pendingUsernames,

@@ -21,7 +21,7 @@ builder.Services.AddOptions<EmailVerificationCodeOptions>()
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
-builder.Services.AddSingleton<EmailService>();
+builder.Services.AddSingleton<IEmailService, EmailService>();
 builder.Services.AddSingleton<PasswordHashService>();
 builder.Services.AddTransient<IMemoryCache, MemoryCache>();
 builder.Services.AddSingleton<IHashService, HashService>();
