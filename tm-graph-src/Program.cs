@@ -28,6 +28,7 @@ builder.Services.AddSingleton<IHashService, HashService>();
 builder.Services.AddSingleton(typeof(ITypedCache<,>), typeof(TypedCacheService<,>));
 builder.Services.AddSingleton(typeof(ITypedSet<>), typeof(TypedSetService<>));
 builder.Services.AddSingleton<EmailVerificationService>();
+builder.Services.AddScoped<IUserStore, UserStore>();
 builder.Services.AddScoped<UniquenessVerifierService>();
 builder.Services.AddDbContext<AppDbContext>(options =>
     {
