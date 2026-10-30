@@ -1,0 +1,20 @@
+﻿@tm_graph_HostAddress = http://localhost:5079
+
+# @name register
+POST {{tm_graph_HostAddress}}/api/User/register
+Content-Type: application/json
+Accept: application/json
+
+{
+  "username": " ",
+  "email": "real.rddus.link@gmail.com",
+  "password": "12345678"
+}
+
+###
+
+POST {{tm_graph_HostAddress}}/api/User/confirm?code=804777148355
+Cookie: X-Register-Verification-Token=AMMguTQFpdPOBngGiZhNXVsiyxb5Ql8B
+Accept: application/json
+
+###

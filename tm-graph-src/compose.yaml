@@ -1,0 +1,7 @@
+﻿services:
+  tm-graph:
+    image: tm-graph
+    build:
+      context: .
+      dockerfile: Dockerfile
+
