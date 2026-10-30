@@ -29,6 +29,8 @@ builder.Services.AddSingleton(typeof(ITypedCache<,>), typeof(TypedCacheService<,
 builder.Services.AddSingleton(typeof(ITypedSet<>), typeof(TypedSetService<>));
 builder.Services.AddSingleton<EmailVerificationService>();
 builder.Services.AddScoped<IUserStore, UserStore>();
+builder.Services.AddScoped<ISessionStore, SessionStore>();
+builder.Services.AddScoped<SessionService>();
 builder.Services.AddScoped<UniquenessVerifierService>();
 builder.Services.AddDbContext<AppDbContext>(options =>
     {

@@ -1,11 +1,10 @@
 ﻿using System.Security.Cryptography;
-using Microsoft.EntityFrameworkCore;
 
 namespace tm_graph_src.Services;
 
-public class SessionService(AppDbContext appDbContext, IHashService hashService)
+public class SessionService(ISessionStore sessionStore, IHashService hashService)
 {
-    public async Task<string> CreateSession(User user, string userAgent)
+    public async Task<string> CreateSession(User user, string userAgent, CancellationToken cancellationToken = default)
     {
         var token = RandomNumberGenerator.GetString(CryptoConsts.Alphanumeric, CryptoConsts.TokenLength);
         var session = new Session()
@@ -14,25 +13,13 @@ public class SessionService(AppDbContext appDbContext, IHashService hashService)
             UserId = user.Id,
             UserAgent = userAgent
         };
-        await appDbContext.Sessions.AddAsync(session);
+        await sessionStore.AddAsync(session, cancellationToken);
         return token;
     }
 
-    public async Task RevokeSession(User user, string session)
-    {
-        var hash = hashService.Hash(session);   
-        var target = from s in appDbContext.Sessions
-            where s.UserId == user.Id && s.TokenHash == hash
-            select s;
-        await target.ExecuteDeleteAsync();
-    }
-    
-    public async Task RevokeSessionById(User user, string sessionId)
-    {
-        var target = from s in appDbContext.Sessions
-            where s.UserId == user.Id && s.Id == sessionId
-            select s;
-        await target.ExecuteDeleteAsync();
-    }
-    
+    public Task RevokeSession(User user, string session, CancellationToken cancellationToken = default) =>
+        sessionStore.RevokeByTokenHashAsync(user.Id, hashService.Hash(session), cancellationToken);
+
+    public Task RevokeSessionById(User user, string sessionId, CancellationToken cancellationToken = default) =>
+        sessionStore.RevokeByIdAsync(user.Id, sessionId, cancellationToken);
 }
