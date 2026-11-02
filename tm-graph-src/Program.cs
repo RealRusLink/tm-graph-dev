@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using tm_graph_src;
+using tm_graph_src.Binders;
 using tm_graph_src.Options;
 using tm_graph_src.Services;
 using tm_graph.Services;
@@ -52,7 +53,10 @@ builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 
-builder.Services.AddControllers();
+builder.Services.AddControllers((options) =>
+{
+    options.ModelBinderProviders.Insert(0, new UserBinderProvider());
+});
 builder.Services.AddOpenApi();
 builder.Services.AddLogging();
 
