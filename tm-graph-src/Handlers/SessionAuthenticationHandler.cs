@@ -4,13 +4,13 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 using tm_graph_src.Exceptions;
 using tm_graph_src.Options;
-using NotImplementedException = System.NotImplementedException;
-
+    
 namespace tm_graph_src.Services;
 
 public class SessionAuthenticationHandler(
     SessionService sessionService,
     IOptionsMonitor<SessionAuthenticationOptions> options,
+    IOptions<SessionLifetimeOptions> sessionOptions,
     ILoggerFactory logger,
     UrlEncoder encoder)
     : AuthenticationHandler<SessionAuthenticationOptions>(options, logger, encoder), IAuthenticationSignInHandler,
@@ -28,7 +28,13 @@ public class SessionAuthenticationHandler(
         {
             Response.Cookies.Delete(SessionCookieName);
             return AuthenticateResult.Fail("Bad session token");
-        };
+        }
+        if (session.ExpiresAt <= DateTimeOffset.UtcNow)
+        {
+            await sessionService.RevokeSession(sessionToken);
+            Response.Cookies.Delete(SessionCookieName);
+            return AuthenticateResult.Fail("Session expired");
+        }
         if (session.UserAgent != Request.Headers.UserAgent.ToString())
         {
             Response.Cookies.Delete(SessionCookieName);
@@ -60,12 +66,20 @@ public class SessionAuthenticationHandler(
     {
         var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId is null) throw new InternalServerErrorException("Can't sign user in without user Id.");
-        var token = await sessionService.CreateSession(userId, Request.Headers.UserAgent.ToString());
+        var lifetime = properties?.IsPersistent == true
+            ? sessionOptions.Value.LongLifetime
+            : sessionOptions.Value.ShortLifetime;
+        var (token, expiresAt) = await sessionService.CreateSession(
+            userId,
+            Request.Headers.UserAgent.ToString(),
+            lifetime);
         Response.Cookies.Append(SessionCookieName, token, new CookieOptions()
         {
             HttpOnly = true,
             Secure = true,
-            SameSite = SameSiteMode.Strict
+            SameSite = SameSiteMode.Strict,
+            Expires = expiresAt,
+            MaxAge = lifetime
         });
     }
 }

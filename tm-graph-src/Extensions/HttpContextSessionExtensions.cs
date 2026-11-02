@@ -5,7 +5,7 @@ namespace tm_graph_src.Extensions;
 
 public static class HttpContextSessionExtensions
 {
-    public static async Task UserSignIn(this HttpContext context, User user)
+    public static async Task UserSignIn(this HttpContext context, User user, bool rememberMe = false)
     {
         var schemeProvider = context.RequestServices
             .GetRequiredService<IAuthenticationSchemeProvider>();
@@ -19,7 +19,10 @@ public static class HttpContextSessionExtensions
             claims, scheme.Name
         );
         var claimsPrincipal = new ClaimsPrincipal(identity);
-        await context.SignInAsync(scheme.Name, claimsPrincipal);
+        await context.SignInAsync(scheme.Name, claimsPrincipal, new AuthenticationProperties
+        {
+            IsPersistent = rememberMe
+        });
     }
 
     public static async Task UserSignOut(this HttpContext context)
