@@ -23,14 +23,27 @@ public class UniquenessVerifierService(IUserStore userStore, EmailVerificationSe
     /// </exception>
     public async Task UserUnique(CreateUserDto userDto, EmailVerificationReason reason)
     {
-        var emailRegistered = await userStore.EmailExistsAsync(userDto.Email);
-        var usernameRegistered = await userStore.UsernameExistsAsync(userDto.Username);
-        var emailPending = await emailVerificationService.EmailPending(userDto.Email, reason);
-        var usernamePending = await emailVerificationService.UsernamePending(userDto.Username, reason);
+        await EmailUnique(userDto.Email, reason);
+        await UserNameUnique(userDto.Username, reason);
+    }
 
-        if (emailRegistered) throw new ConflictException("User with this email already exists");
+    public async Task UserNameUnique(string username, EmailVerificationReason reason)
+    {
+        var usernameRegistered = await userStore.UsernameExistsAsync(username);
         if (usernameRegistered) throw new ConflictException("User with this username already exists");
-        if (emailPending) throw new ConflictException("User with this email is already pending");
+        var usernamePending = await emailVerificationService.UsernamePending(username, reason);
         if (usernamePending) throw new ConflictException("User with this username is already pending");
     }
+
+    public async Task EmailUnique(string email, EmailVerificationReason reason)
+    {
+        var emailRegistered = await userStore.EmailExistsAsync(email);
+        if (emailRegistered) throw new ConflictException("User with this email already exists");
+        var emailPending = await emailVerificationService.EmailPending(email, reason);
+        if (emailPending) throw new ConflictException("User with this email is already pending");
+    }
+
+
 }
+
+
