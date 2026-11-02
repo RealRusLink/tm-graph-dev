@@ -54,16 +54,13 @@ public class SessionAuthenticationHandler(
 
     public async Task SignOutAsync(AuthenticationProperties? properties)
     {
-        var token = Request.Cookies[SessionCookieName];
-        if (token is not null)
-        {
-            await sessionService.RevokeSession(token);
-        }
+        await _revoke(Context);
         Response.Cookies.Delete(SessionCookieName);
     }
 
     public async Task SignInAsync(ClaimsPrincipal user, AuthenticationProperties? properties)
     {
+        await _revoke(Context);
         var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId is null) throw new InternalServerErrorException("Can't sign user in without user Id.");
         var lifetime = properties?.IsPersistent == true
@@ -82,4 +79,13 @@ public class SessionAuthenticationHandler(
             MaxAge = lifetime
         });
     }
+    
+    private async Task _revoke(HttpContext context){        
+        var token = context.Request.Cookies[SessionCookieName];
+        if (token is not null)
+        {
+            await sessionService.RevokeSession(token);
+        }
+    }
+    
 }

@@ -20,12 +20,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<Connection>().HasOne(c => c.Parent).WithMany().HasForeignKey(c => c.ParentId).OnDelete(DeleteBehavior.Cascade);
         modelBuilder.Entity<Connection>().HasIndex(c => c.ParentId);
         
-        modelBuilder.Entity<User>().HasMany(u => u.Records).WithOne(r => r.User).OnDelete(DeleteBehavior.Cascade);
         modelBuilder.Entity<User>().HasIndex(u => u.Email).IsUnique();
         modelBuilder.Entity<User>().HasIndex(u => u.Username).IsUnique();
 
         modelBuilder.Entity<Record>().HasMany(r => r.Children).WithOne(r => r.Parent).OnDelete(DeleteBehavior.Cascade);
-
+        modelBuilder.Entity<Record>().HasOne(r => r.User).WithMany().OnDelete(DeleteBehavior.Cascade);
+        
         modelBuilder.Entity<Session>().HasOne(s => s.User).WithMany().OnDelete(DeleteBehavior.Cascade);
         modelBuilder.Entity<Session>().HasIndex(s => s.TokenHash).IsUnique();
     }
@@ -37,7 +37,6 @@ public class User
     public string Username { get; set; } = null!;
     public string Email { get; set; } = null!;
     public string Hash { get; set; } = null!;
-    public ICollection<Record> Records { get; set; } = null!;
 }
 
 public class Record
