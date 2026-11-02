@@ -398,5 +398,10 @@ FodyWeavers.xsd
 # JetBrains Rider
 *.sln.iml
 
+# JetBrains HTTP Client private environment
+http-client.private.env.json
+
 appsettings.*
 *.db
+*.db-shm
+*.db-wal
