@@ -51,6 +51,13 @@ builder.Services.AddAuthentication(options =>
 
 
 var app = builder.Build();
+    
+if (!EF.IsDesignTime)
+{
+    using var scope = app.Services.CreateScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await dbContext.Database.MigrateAsync();
+}
 
 app.UseRouting();
 
