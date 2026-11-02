@@ -8,7 +8,7 @@
 
 ### 1. Register
 # @name register
-POST {{host}}/api/User/register
+POST {{host}}/api/auth/register
 Content-Type: application/json
 Accept: application/json
 
@@ -27,7 +27,7 @@ Accept: application/json
 
 ### 2. Confirm
 # @name confirm
-POST {{host}}/api/User/confirm?code={{verificationCode}}
+POST {{host}}/api/auth/confirm?code={{verificationCode}}
 Accept: application/json
 
 > {%
@@ -39,7 +39,7 @@ Accept: application/json
 
 ### 3. Login by email
 # @name loginByEmail
-POST {{host}}/api/User/login
+POST {{host}}/api/auth/login
 Content-Type: application/json
 Accept: application/json
 
@@ -57,7 +57,7 @@ Accept: application/json
 
 ### 4. Logout
 # @name logout
-POST {{host}}/api/User/logout
+POST {{host}}/api/auth/logout
 Accept: application/json
 
 > {%
@@ -69,7 +69,7 @@ Accept: application/json
 
 ### 5. Login by username
 # @name loginByUsername
-POST {{host}}/api/User/login
+POST {{host}}/api/auth/login
 Content-Type: application/json
 Accept: application/json
 
@@ -87,7 +87,7 @@ Accept: application/json
 
 ### 6. Logout
 # @name logoutByUsername
-POST {{host}}/api/User/logout
+POST {{host}}/api/auth/logout
 Accept: application/json
 
 > {%
@@ -98,7 +98,7 @@ Accept: application/json
 
 
 ### 7. Duplicate register: 409
-POST {{host}}/api/User/register
+POST {{host}}/api/auth/register
 Content-Type: application/json
 Accept: application/json
 
@@ -116,7 +116,7 @@ Accept: application/json
 
 
 ### 8. Wrong password: 400
-POST {{host}}/api/User/login
+POST {{host}}/api/auth/login
 Content-Type: application/json
 Accept: application/json
 

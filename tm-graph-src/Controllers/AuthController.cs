@@ -12,7 +12,7 @@ using tm_graph.Types;
 namespace tm_graph_src.Controllers;
 [ApiController]
 [Route("api/[controller]")]
-public class UserController(IUserStore userStore, EmailVerificationService emailVerificationService, UniquenessVerifierService uniquenessVerifierService, PasswordHashService passwordHashService, IOptions<EmailVerificationCodeOptions> options) : ControllerBase
+public class AuthController(IUserStore userStore, EmailVerificationService emailVerificationService, UniquenessVerifierService uniquenessVerifierService, PasswordHashService passwordHashService, IOptions<EmailVerificationCodeOptions> options) : ControllerBase
 {
 
     private const string _registerCookieName = "X-Register-Verification-Token";

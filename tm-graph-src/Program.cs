@@ -49,6 +49,11 @@ builder.Services.AddAuthentication(options =>
 }).AddScheme<SessionAuthenticationOptions, SessionAuthenticationHandler>(SessionAuthenticationOptions.SchemeName,
     o => { });
 
+builder.Services.AddRouting(options =>
+{
+    options.LowercaseUrls = true;
+    options.LowercaseQueryStrings = true;
+});
 
 var app = builder.Build();
     
