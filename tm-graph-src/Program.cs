@@ -4,10 +4,7 @@ using tm_graph_src;
 using tm_graph_src.Options;
 using tm_graph_src.Services;
 using tm_graph.Services;
-Console.WriteLine(System.Environment.CurrentDirectory);
-Console.WriteLine(System.Environment.CurrentDirectory);
-Console.WriteLine(System.Environment.CurrentDirectory);
-Console.WriteLine(System.Environment.CurrentDirectory);
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -46,7 +43,11 @@ builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services.AddLogging();
 
-
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultScheme = SessionAuthenticationOptions.SchemeName;
+}).AddScheme<SessionAuthenticationOptions, SessionAuthenticationHandler>(SessionAuthenticationOptions.SchemeName,
+    o => { });
 
 
 var app = builder.Build();

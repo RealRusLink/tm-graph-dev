@@ -1,6 +1,9 @@
-﻿namespace tm_graph_src.Options;
+﻿using Microsoft.AspNetCore.Authentication;
 
-public class SessionAuthenticationOptions
+namespace tm_graph_src.Options;
+
+public class SessionAuthenticationOptions : AuthenticationSchemeOptions
 {
-    
+    public static string SchemeName = "CookieSession";
+    public static string ContextItemUserKey = "UserKey";
 }
