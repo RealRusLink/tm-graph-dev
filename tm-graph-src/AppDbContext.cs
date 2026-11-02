@@ -18,6 +18,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<Connection>().HasOne(c => c.To).WithMany().HasForeignKey(c => c.ToId).OnDelete(DeleteBehavior.Cascade);
         modelBuilder.Entity<Connection>().HasOne(c => c.From).WithMany().HasForeignKey(c => c.FromId).OnDelete(DeleteBehavior.Cascade);
         modelBuilder.Entity<Connection>().HasOne(c => c.Parent).WithMany().HasForeignKey(c => c.ParentId).OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<Connection>().HasIndex(c => c.ParentId);
         
         modelBuilder.Entity<User>().HasMany(u => u.Records).WithOne(r => r.User).OnDelete(DeleteBehavior.Cascade);
         modelBuilder.Entity<User>().HasIndex(u => u.Email).IsUnique();
