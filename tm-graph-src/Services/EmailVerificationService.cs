@@ -43,8 +43,8 @@ public class EmailVerificationService(
         {
             await emailService.SendMessage(
                 user.Email,
-                $"Your code is {code}",
-                "Verification code");
+                _options.EmailBodyTemplate.Replace("{code}", code),
+                _options.EmailSubject);
         }
         catch
         {
@@ -67,6 +67,16 @@ public class EmailVerificationService(
         var user = await _executeExclusive(async () =>
            await _unsetUser(hashService.Hash(session), hashService.Hash(code), reason));
         return user;
+    }
+
+    /// <summary>
+    /// Returns the pending user without consuming the verification code.
+    /// Use this to persist the user first and only then invalidate the code.
+    /// </summary>
+    public async Task<User?> PeekVerification(string code, string session, EmailVerificationReason reason)
+    {
+        return await _executeExclusive(async () =>
+            await pendingUsers.GetValue((hashService.Hash(session), hashService.Hash(code), reason)));
     }
 
 

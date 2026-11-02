@@ -15,9 +15,9 @@ public interface IEmailService
 public class EmailService(IOptions<EmailOptions> emailOptions) : IEmailService
 {
 
-    private EmailOptions _options = emailOptions.Value;
-    
-    private MailboxAddress _address = new MailboxAddress("App", emailOptions.Value.Address);
+    private readonly EmailOptions _options = emailOptions.Value;
+
+    private readonly MailboxAddress _address = new(emailOptions.Value.FromName, emailOptions.Value.Address);
 
     public async Task SendMessage([EmailAddress] string emailTo, string messageText, string messageSubject)
     {
@@ -30,7 +30,7 @@ public class EmailService(IOptions<EmailOptions> emailOptions) : IEmailService
         {
             try
             {
-                await client.ConnectAsync(host: _options.SmtpServer, port: _options.Port, SecureSocketOptions.StartTls);
+                await client.ConnectAsync(host: _options.SmtpServer, port: _options.Port, _options.SecureSocketOption);
                 await client.AuthenticateAsync(_options.Address, _options.Password);
                 await client.SendAsync(message);
             }
