@@ -1,10 +1,11 @@
 ﻿using tm_graph_src.Controllers;
 using tm_graph_src.Exceptions;
 using tm_graph.Types;
+using Microsoft.EntityFrameworkCore;
 
 namespace tm_graph_src.Services;
 
-public class UniquenessVerifierService(IUserStore userStore, EmailVerificationService emailVerificationService)
+public class UniquenessVerifierService(AppDbContext appDbContext, EmailVerificationService emailVerificationService)
 {
     /// <summary>
     /// Verifies the uniqueness of a user's email and username against the registered and pending entries.
@@ -23,8 +24,9 @@ public class UniquenessVerifierService(IUserStore userStore, EmailVerificationSe
     /// </exception>
     public async Task UserUnique(CreateUserDto userDto, EmailVerificationReason reason)
     {
-        var emailRegistered = await userStore.EmailExistsAsync(userDto.Email);
-        var usernameRegistered = await userStore.UsernameExistsAsync(userDto.Username);
+        var emailRegistered = await appDbContext.Users.AnyAsync(u => u.Email == userDto.Email);
+        var usernameRegistered = await appDbContext.Users.AnyAsync(u => u.Username == userDto.Username);
+
         var emailPending = await emailVerificationService.EmailPending(userDto.Email, reason);
         var usernamePending = await emailVerificationService.UsernamePending(userDto.Username, reason);
 
