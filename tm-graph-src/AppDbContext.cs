@@ -27,6 +27,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<Record>().HasMany(r => r.Children).WithOne(r => r.Parent).OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<Session>().HasOne(s => s.User).WithMany().OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<Session>().HasIndex(s => s.TokenHash).IsUnique();
     }
 };
 
@@ -80,4 +81,5 @@ public class Session
     public string UserId { get; set; } = null!;
     public User User { get; set; } = null!;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTimeOffset ExpiresAt { get; set; }
 }
