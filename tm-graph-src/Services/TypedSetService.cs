@@ -10,11 +10,11 @@ public class TypedSetService<T>(ITypedCache<T, bool> cache) : ITypedSet<T>
         return await cache.KeyExists(value);
     }
 
-    public async ValueTask Set(T value, MemoryCacheEntryOptions options = null)
+    public async ValueTask Set(T value, MemoryCacheEntryOptions options = default!)
     {
         if (!(await Has(value)))
         {
-            cache.SetValue(value, true, options);
+            await cache.SetValue(value, true, options);
         }
         else
         {

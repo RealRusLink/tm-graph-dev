@@ -49,7 +49,7 @@ public class UserControllerTest
 
     private string SessionFromResponse()
     {
-        var cookie = Assert.Single(_controller.Response.Headers.SetCookie);
+        var cookie = Assert.Single(_controller.Response.Headers.SetCookie)!;
         var pair = cookie.Split(';')[0];
         return pair[(CookieName.Length + 1)..];
     }

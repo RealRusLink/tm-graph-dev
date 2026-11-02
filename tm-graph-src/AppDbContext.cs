@@ -32,26 +32,26 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 public class User
 {
     public string Id { get; set; } = Guid.NewGuid().ToString();
-    public string Username { get; set; }
-    public string Email { get; set; }
-    public string Hash { get; set; }
-    public ICollection<Record> Records { get; set; }
+    public string Username { get; set; } = null!;
+    public string Email { get; set; } = null!;
+    public string Hash { get; set; } = null!;
+    public ICollection<Record> Records { get; set; } = null!;
 }
 
 public class Record
 {
     public string Id { get; set; } = Guid.NewGuid().ToString();
     
-    public string UserId { get; set; }
-    public User User { get; set; }
+    public string UserId { get; set; } = null!;
+    public User User { get; set; } = null!;
     
     public string? ParentId { get; set; }
     public Record? Parent { get; set; }
     
-    public ICollection<Record> Children { get; set; }
+    public ICollection<Record> Children { get; set; } = null!;
     
     
-    public string Name { get; set; }
+    public string Name { get; set; } = null!;
     public string? Description { get; set; }
 }
 
@@ -60,23 +60,23 @@ public class Connection
     
     public string Id { get; set; } = Guid.NewGuid().ToString();
     
-    public string ParentId { get; set; }
-    public Record Parent { get; set; }
+    public string ParentId { get; set; } = null!;
+    public Record Parent { get; set; } = null!;
     
-    public string FromId { get; set; }
-    public Record From { get; set; }
+    public string FromId { get; set; } = null!;
+    public Record From { get; set; } = null!;
     
-    public string ToId { get; set; }
-    public Record To { get; set; }
+    public string ToId { get; set; } = null!;
+    public Record To { get; set; } = null!;
     
 }
 
 public class Session
 {   
     public string Id { get; set; } = Guid.NewGuid().ToString();
-    public string UserAgent { get; set; }
-    public string TokenHash { get; set; }
-    public string UserId { get; set; }
-    public User User { get; set; }
+    public string UserAgent { get; set; } = null!;
+    public string TokenHash { get; set; } = null!;
+    public string UserId { get; set; } = null!;
+    public User User { get; set; } = null!;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
