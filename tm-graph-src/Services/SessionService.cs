@@ -19,7 +19,6 @@ public class SessionService(AppDbContext appDbContext, IHashService hashService)
             UserAgent = userAgent,
             ExpiresAt = expiresAt
         };
-        // await sessionStore.AddAsync(session, cancellationToken);
         await appDbContext.Sessions.AddAsync(session);
         await appDbContext.SaveChangesAsync();
         return (token, expiresAt);

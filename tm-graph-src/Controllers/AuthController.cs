@@ -59,8 +59,6 @@ public class AuthController(AppDbContext appDbContext, EmailVerificationService 
             session,
             EmailVerificationReason.Registration);
         if (user is null) throw new BadRequestException();
-
-        // await userStore.AddAsync(user);
         await appDbContext.Users.AddAsync(user);
         await appDbContext.SaveChangesAsync();
         await emailVerificationService.CompleteVerification(
@@ -78,13 +76,11 @@ public class AuthController(AppDbContext appDbContext, EmailVerificationService 
         User? user;
         if (EmailRegex.IsMatch(identifier))
         {
-            // user = await userStore.GetUserByEmail(identifier.ToLowerInvariant());
             user = await appDbContext.Users.FirstOrDefaultAsync((u) => u.Email == identifier);
         }
         else if (UsernameRegex.IsMatch(identifier))
         {
             user = await appDbContext.Users.FirstOrDefaultAsync((u) => u.Username == identifier);
-            // user = await userStore.GetUserByUsername(identifier);
         }
         else
         {
