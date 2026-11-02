@@ -1,6 +1,8 @@
-﻿namespace tm_graph_src.Services;
+﻿using Microsoft.EntityFrameworkCore;
 
-public class SessionService(ISessionStore sessionStore, IHashService hashService)
+namespace tm_graph_src.Services;
+
+public class SessionService(ISessionStore sessionStore, AppDbContext appDbContext, IHashService hashService)
 {
     public async Task<(string Token, DateTimeOffset ExpiresAt)> CreateSession(
         string userId,
@@ -17,19 +19,26 @@ public class SessionService(ISessionStore sessionStore, IHashService hashService
             UserAgent = userAgent,
             ExpiresAt = expiresAt
         };
-        await sessionStore.AddAsync(session, cancellationToken);
+        // await sessionStore.AddAsync(session, cancellationToken);
+        await appDbContext.Sessions.AddAsync(session);
+        await appDbContext.SaveChangesAsync();
         return (token, expiresAt);
     }
 
-    public async Task RevokeSession(string session, CancellationToken cancellationToken = default) =>
-        await sessionStore.RevokeByTokenHashAsync(hashService.Hash(session), cancellationToken);
+    public async Task RevokeSession(string session, CancellationToken cancellationToken = default)
+    {
+        await appDbContext.Sessions
+        .Where(s => s.TokenHash == hashService.Hash(session)).ExecuteDeleteAsync();
+    }
 
-    public async Task RevokeSessionById(User user, string sessionId, CancellationToken cancellationToken = default) =>
-        await sessionStore.RevokeByIdAsync(user.Id, sessionId, cancellationToken);
+    public async Task RevokeSessionById(User user, string sessionId, CancellationToken cancellationToken = default)
+    {
+        await appDbContext.Sessions.Where(s => s.UserId == user.Id && s.Id == sessionId).ExecuteDeleteAsync();
+    }
 
     public async Task<Session?> GetSession(string sessionToken)
     {
-        return await sessionStore.GetSession(hashService.Hash(sessionToken));
+        return await appDbContext.Sessions.FirstOrDefaultAsync(s => s.TokenHash == hashService.Hash(sessionToken));
     }
-    
+
 }
