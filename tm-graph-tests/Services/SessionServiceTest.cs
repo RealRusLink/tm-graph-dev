@@ -23,7 +23,7 @@ public class SessionServiceTest
     {
         var user = NewUser(userId);
         var before = _store.Sessions.Count;
-        var token = await _service.CreateSession(user.Id, "test-agent");
+        var (token, _) = await _service.CreateSession(user.Id, "test-agent", TimeSpan.FromDays(1));
 
         Assert.Equal(before + 1, _store.Sessions.Count);
         return (user, token, _store.Sessions[^1]);
@@ -53,11 +53,23 @@ public class SessionServiceTest
     [Fact]
     public async Task CreateSession_ShouldGenerateUniqueTokens()
     {
-        var first = await _service.CreateSession(NewUser("user-1").Id, "agent-1");
-        var second = await _service.CreateSession(NewUser("user-2").Id, "agent-2");
+        var (first, _) = await _service.CreateSession(NewUser("user-1").Id, "agent-1", TimeSpan.FromDays(1));
+        var (second, _) = await _service.CreateSession(NewUser("user-2").Id, "agent-2", TimeSpan.FromDays(1));
 
         Assert.NotEqual(first, second);
         Assert.Equal(2, _store.Sessions.Count);
+    }
+
+    [Fact]
+    public async Task CreateSession_ShouldSetExpiryFromLifetime()
+    {
+        var before = DateTimeOffset.UtcNow;
+
+        var (_, expiresAt) = await _service.CreateSession("user-1", "test-agent", TimeSpan.FromHours(3));
+
+        var session = Assert.Single(_store.Sessions);
+        Assert.Equal(expiresAt, session.ExpiresAt);
+        Assert.InRange(session.ExpiresAt, before.AddHours(3), DateTimeOffset.UtcNow.AddHours(3));
     }
 
     [Fact]

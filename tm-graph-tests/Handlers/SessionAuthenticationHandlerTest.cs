@@ -24,6 +24,7 @@ public class SessionAuthenticationHandlerTest
         _handler = new SessionAuthenticationHandler(
             _sessionService,
             new StubOptionsMonitor<SessionAuthenticationOptions>(new SessionAuthenticationOptions()),
+            Options.Create(new SessionLifetimeOptions()),
             NullLoggerFactory.Instance,
             UrlEncoder.Default);
     }
@@ -58,7 +59,7 @@ public class SessionAuthenticationHandlerTest
             Email = "user@example.com",
             Hash = "hash"
         };
-        var token = await _sessionService.CreateSession(user.Id, userAgent);
+        var (token, _) = await _sessionService.CreateSession(user.Id, userAgent, TimeSpan.FromDays(1));
 
         // SessionStore подгружает User через Include, фейк делаем таким же
         _store.Sessions[^1].User = user;
@@ -118,6 +119,23 @@ public class SessionAuthenticationHandlerTest
     }
 
     [Fact]
+    public async Task Authenticate_ShouldFail_AndDeleteExpiredSession()
+    {
+        var (_, token) = await CreateSessionAsync();
+        _store.Sessions[^1].ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(-1);
+        await InitializeAsync();
+        SetSessionCookie(token);
+        _httpContext.Request.Headers.UserAgent = "test-agent";
+
+        var result = await _handler.AuthenticateAsync();
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("Session expired", result.Failure!.Message);
+        Assert.Empty(_store.Sessions);
+        Assert.Contains("expires=Thu, 01 Jan 1970", SetCookieHeader(_httpContext)!);
+    }
+
+    [Fact]
     public async Task Authenticate_ShouldSucceed_AndExposeUserAndClaim()
     {
         var (user, token) = await CreateSessionAsync("test-agent");
@@ -167,6 +185,38 @@ public class SessionAuthenticationHandlerTest
         Assert.Contains("httponly", cookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("secure", cookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("samesite=strict", cookie, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task SignIn_ShouldUseShortLifetime_WhenNotPersistent()
+    {
+        await InitializeAsync();
+        _httpContext.Request.Headers.UserAgent = "test-agent";
+        var principal = new ClaimsPrincipal(new ClaimsIdentity([
+            new Claim(ClaimTypes.NameIdentifier, "user-42")
+        ]));
+        var before = DateTimeOffset.UtcNow;
+
+        await _handler.SignInAsync(principal, properties: null);
+
+        var session = Assert.Single(_store.Sessions);
+        Assert.InRange(session.ExpiresAt, before.AddHours(2), DateTimeOffset.UtcNow.AddHours(2));
+    }
+
+    [Fact]
+    public async Task SignIn_ShouldUseLongLifetime_WhenPersistent()
+    {
+        await InitializeAsync();
+        _httpContext.Request.Headers.UserAgent = "test-agent";
+        var principal = new ClaimsPrincipal(new ClaimsIdentity([
+            new Claim(ClaimTypes.NameIdentifier, "user-42")
+        ]));
+        var before = DateTimeOffset.UtcNow;
+
+        await _handler.SignInAsync(principal, new AuthenticationProperties { IsPersistent = true });
+
+        var session = Assert.Single(_store.Sessions);
+        Assert.InRange(session.ExpiresAt, before.AddDays(30), DateTimeOffset.UtcNow.AddDays(30));
     }
 
     [Fact]

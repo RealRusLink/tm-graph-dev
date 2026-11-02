@@ -8,7 +8,6 @@ using Microsoft.Extensions.Options;
 using tm_graph.Services;
 using tm_graph.Types;
 using tm_graph_src;
-using tm_graph_src.Exceptions;
 using tm_graph_src.Options;
 using tm_graph_src.Services;
 
@@ -41,11 +40,11 @@ internal sealed class FakeUserStore : IUserStore
     public Task<bool> UsernameExistsAsync(string username, CancellationToken cancellationToken = default) =>
         Task.FromResult(Users.Any(u => u.Username == username));
 
-    public Task<User> GetUserByEmail(string email, string errorMessage = "User with this email doesn't exist") =>
-        Task.FromResult(Users.FirstOrDefault(u => u.Email == email) ?? throw new NotFoundException(errorMessage));
+    public Task<User?> GetUserByEmail(string email, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Users.FirstOrDefault(u => u.Email == email));
 
-    public Task<User> GetUserByUsername(string username, string errorMessage = "User with this username doesn't exist") =>
-        Task.FromResult(Users.FirstOrDefault(u => u.Username == username) ?? throw new NotFoundException(errorMessage));
+    public Task<User?> GetUserByUsername(string username, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Users.FirstOrDefault(u => u.Username == username));
 
     public Task AddAsync(User user, CancellationToken cancellationToken = default)
     {
@@ -87,7 +86,7 @@ internal sealed class FakeSessionStore : ISessionStore
 
 internal sealed class FakeAuthenticationService : IAuthenticationService
 {
-    public List<(string? Scheme, ClaimsPrincipal Principal)> SignIns { get; } = new();
+    public List<(string? Scheme, ClaimsPrincipal Principal, AuthenticationProperties? Properties)> SignIns { get; } = new();
 
     public List<string?> SignOuts { get; } = new();
 
@@ -103,7 +102,7 @@ internal sealed class FakeAuthenticationService : IAuthenticationService
     public Task SignInAsync(HttpContext context, string? scheme, ClaimsPrincipal principal,
         AuthenticationProperties? properties)
     {
-        SignIns.Add((scheme, principal));
+        SignIns.Add((scheme, principal, properties));
         return Task.CompletedTask;
     }
 
