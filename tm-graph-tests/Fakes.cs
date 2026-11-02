@@ -48,7 +48,7 @@ internal sealed class FakeSessionStore : ISessionStore
 {
     public List<Session> Sessions { get; } = new();
 
-    public List<(string UserId, string TokenHash)> RevokedByTokenHash { get; } = new();
+    public List<string> RevokedByTokenHash { get; } = new();
 
     public List<(string UserId, string SessionId)> RevokedById { get; } = new();
 
@@ -58,10 +58,10 @@ internal sealed class FakeSessionStore : ISessionStore
         return Task.CompletedTask;
     }
 
-    public Task<bool> RevokeByTokenHashAsync(string userId, string tokenHash, CancellationToken cancellationToken = default)
+    public Task<bool> RevokeByTokenHashAsync(string tokenHash, CancellationToken cancellationToken = default)
     {
-        RevokedByTokenHash.Add((userId, tokenHash));
-        return Task.FromResult(Sessions.RemoveAll(s => s.UserId == userId && s.TokenHash == tokenHash) > 0);
+        RevokedByTokenHash.Add(tokenHash);
+        return Task.FromResult(Sessions.RemoveAll(s => s.TokenHash == tokenHash) > 0);
     }
 
     public Task<bool> RevokeByIdAsync(string userId, string sessionId, CancellationToken cancellationToken = default)
@@ -69,6 +69,9 @@ internal sealed class FakeSessionStore : ISessionStore
         RevokedById.Add((userId, sessionId));
         return Task.FromResult(Sessions.RemoveAll(s => s.UserId == userId && s.Id == sessionId) > 0);
     }
+
+    public Task<Session?> GetSession(string tokenHash) =>
+        Task.FromResult(Sessions.FirstOrDefault(s => s.TokenHash == tokenHash));
 }
 
 internal static class TestServices

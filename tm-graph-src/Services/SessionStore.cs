@@ -6,9 +6,13 @@ public interface ISessionStore
 {
     Task AddAsync(Session session, CancellationToken cancellationToken = default);
 
-    Task<bool> RevokeByTokenHashAsync(string userId, string tokenHash, CancellationToken cancellationToken = default);
+    Task<bool> RevokeByTokenHashAsync(string tokenHash, CancellationToken cancellationToken = default);
 
     Task<bool> RevokeByIdAsync(string userId, string sessionId, CancellationToken cancellationToken = default);
+
+    Task<Session?> GetSession(string tokenHash);
+
+
 }
 
 public class SessionStore(AppDbContext dbContext) : ISessionStore
@@ -19,10 +23,10 @@ public class SessionStore(AppDbContext dbContext) : ISessionStore
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<bool> RevokeByTokenHashAsync(string userId, string tokenHash, CancellationToken cancellationToken = default)
+    public async Task<bool> RevokeByTokenHashAsync(string tokenHash, CancellationToken cancellationToken = default)
     {
         var removed = await dbContext.Sessions
-            .Where(s => s.UserId == userId && s.TokenHash == tokenHash)
+            .Where(s => s.TokenHash == tokenHash)
             .ExecuteDeleteAsync(cancellationToken);
 
         return removed > 0;
@@ -36,4 +40,10 @@ public class SessionStore(AppDbContext dbContext) : ISessionStore
 
         return removed > 0;
     }
+
+    public async Task<Session?> GetSession(string tokenHash)
+    {
+        return await dbContext.Sessions.Where(s => s.TokenHash == tokenHash).Select(s => s).Include(s => s.User).AsNoTracking().FirstOrDefaultAsync();
+    }
+    
 }

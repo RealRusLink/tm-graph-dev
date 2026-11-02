@@ -23,7 +23,7 @@ public class SessionServiceTest
     {
         var user = NewUser(userId);
         var before = _store.Sessions.Count;
-        var token = await _service.CreateSession(user, "test-agent");
+        var token = await _service.CreateSession(user.Id, "test-agent");
 
         Assert.Equal(before + 1, _store.Sessions.Count);
         return (user, token, _store.Sessions[^1]);
@@ -53,8 +53,8 @@ public class SessionServiceTest
     [Fact]
     public async Task CreateSession_ShouldGenerateUniqueTokens()
     {
-        var first = await _service.CreateSession(NewUser("user-1"), "agent-1");
-        var second = await _service.CreateSession(NewUser("user-2"), "agent-2");
+        var first = await _service.CreateSession(NewUser("user-1").Id, "agent-1");
+        var second = await _service.CreateSession(NewUser("user-2").Id, "agent-2");
 
         Assert.NotEqual(first, second);
         Assert.Equal(2, _store.Sessions.Count);
@@ -63,9 +63,9 @@ public class SessionServiceTest
     [Fact]
     public async Task RevokeSession_ShouldRemoveSession()
     {
-        var (user, token, _) = await CreateSessionAsync();
+        var (_, token, _) = await CreateSessionAsync();
 
-        await _service.RevokeSession(user, token);
+        await _service.RevokeSession(token);
 
         Assert.Empty(_store.Sessions);
     }
@@ -73,23 +73,22 @@ public class SessionServiceTest
     [Fact]
     public async Task RevokeSession_ShouldPassTokenHashInsteadOfPlaintext()
     {
-        var (user, token, _) = await CreateSessionAsync();
+        var (_, token, _) = await CreateSessionAsync();
 
-        await _service.RevokeSession(user, token);
+        await _service.RevokeSession(token);
 
         var revoked = Assert.Single(_store.RevokedByTokenHash);
-        Assert.Equal(user.Id, revoked.UserId);
-        Assert.Equal(_hash.Hash(token), revoked.TokenHash);
-        Assert.NotEqual(token, revoked.TokenHash);
+        Assert.Equal(_hash.Hash(token), revoked);
+        Assert.NotEqual(token, revoked);
     }
 
     [Fact]
     public async Task RevokeSession_ShouldNotAffectSessionsOfOtherUsers()
     {
         var (_, otherToken, _) = await CreateSessionAsync("user-2");
-        var (user, token, _) = await CreateSessionAsync("user-1");
+        var (_, token, _) = await CreateSessionAsync("user-1");
 
-        await _service.RevokeSession(user, token);
+        await _service.RevokeSession(token);
 
         var remaining = Assert.Single(_store.Sessions);
         Assert.Equal("user-2", remaining.UserId);
@@ -116,5 +115,26 @@ public class SessionServiceTest
 
         var remaining = Assert.Single(_store.Sessions);
         Assert.Equal("user-2", remaining.UserId);
+    }
+
+    [Fact]
+    public async Task GetSession_ShouldReturnSession_ForValidToken()
+    {
+        var (user, token, session) = await CreateSessionAsync();
+
+        var found = await _service.GetSession(token);
+
+        Assert.Same(session, found);
+        Assert.Equal(user.Id, found!.UserId);
+    }
+
+    [Fact]
+    public async Task GetSession_ShouldHashTokenBeforeLookup()
+    {
+        var (_, token, _) = await CreateSessionAsync();
+
+        Assert.NotNull(await _service.GetSession(token));
+        Assert.Null(await _service.GetSession(token.ToUpperInvariant()));
+        Assert.Null(await _service.GetSession("unknown-token"));
     }
 }
