@@ -2,6 +2,7 @@
 # First run: copy http-client.private.env.example.json and fill it.
 # Start: dotnet run --launch-profile https
 # After register, put the emailed code into verificationCode, then run confirm.
+# remember_me = true uses the long session lifetime, false uses the short one.
 # Change username/email (or delete app.db) between runs to avoid 409.
 # Cookies are handled automatically.
 
@@ -19,16 +20,22 @@ Accept: application/json
 }
 
 > {%
-    client.test("register: 200 OK", function () {
-        client.assert(response.status === 200, "Expected 200, got " + response.status);
+    client.test("register: 202 Accepted", function () {
+        client.assert(response.status === 202, "Expected 202, got " + response.status);
     });
 %}
 
 
 ### 2. Confirm
 # @name confirm
-POST {{host}}/api/auth/confirm?code={{verificationCode}}
+POST {{host}}/api/auth/confirm
+Content-Type: application/json
 Accept: application/json
+
+{
+  "code": "{{verificationCode}}",
+  "remember_me": false
+}
 
 > {%
     client.test("confirm: 200 OK", function () {
@@ -45,7 +52,8 @@ Accept: application/json
 
 {
   "identifier": "{{email}}",
-  "password": "{{password}}"
+  "password": "{{password}}",
+  "remember_me": false
 }
 
 > {%
@@ -61,8 +69,8 @@ POST {{host}}/api/auth/logout
 Accept: application/json
 
 > {%
-    client.test("logout: 200 OK", function () {
-        client.assert(response.status === 200, "Expected 200, got " + response.status);
+    client.test("logout: 204 No Content", function () {
+        client.assert(response.status === 204, "Expected 204, got " + response.status);
     });
 %}
 
@@ -75,7 +83,8 @@ Accept: application/json
 
 {
   "identifier": "{{username}}",
-  "password": "{{password}}"
+  "password": "{{password}}",
+  "remember_me": true
 }
 
 > {%
@@ -91,8 +100,8 @@ POST {{host}}/api/auth/logout
 Accept: application/json
 
 > {%
-    client.test("logout: 200 OK", function () {
-        client.assert(response.status === 200, "Expected 200, got " + response.status);
+    client.test("logout: 204 No Content", function () {
+        client.assert(response.status === 204, "Expected 204, got " + response.status);
     });
 %}
 
@@ -122,11 +131,30 @@ Accept: application/json
 
 {
   "identifier": "{{email}}",
-  "password": "wrong-password"
+  "password": "wrong-password",
+  "remember_me": false
 }
 
 > {%
     client.test("wrong password: 400 Bad Request", function () {
+        client.assert(response.status === 400, "Expected 400, got " + response.status);
+    });
+%}
+
+
+### 9. Unknown email: 400 (same as wrong password)
+POST {{host}}/api/auth/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "identifier": "missing@example.com",
+  "password": "wrong-password",
+  "remember_me": false
+}
+
+> {%
+    client.test("unknown email: 400 Bad Request", function () {
         client.assert(response.status === 400, "Expected 400, got " + response.status);
     });
 %}
