@@ -14,7 +14,7 @@ namespace tm_graph_src.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class AuthController(IUserStore userStore, AppDbContext appDbContext, EmailVerificationService emailVerificationService, UniquenessVerifierService uniquenessVerifierService, PasswordHashService passwordHashService, IOptions<EmailVerificationCodeOptions> options) : ControllerBase
+public class AuthController(AppDbContext appDbContext, EmailVerificationService emailVerificationService, UniquenessVerifierService uniquenessVerifierService, PasswordHashService passwordHashService, IOptions<EmailVerificationCodeOptions> options) : ControllerBase
 {
     public const string RegisterCookieName = "X-Register-Verification-Token";
 

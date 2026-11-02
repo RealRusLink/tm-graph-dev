@@ -2,7 +2,7 @@
 
 namespace tm_graph_src.Services;
 
-public class SessionService(ISessionStore sessionStore, AppDbContext appDbContext, IHashService hashService)
+public class SessionService(AppDbContext appDbContext, IHashService hashService)
 {
     public async Task<(string Token, DateTimeOffset ExpiresAt)> CreateSession(
         string userId,
