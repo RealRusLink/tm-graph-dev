@@ -89,7 +89,7 @@ public class AuthController(IUserStore userStore, EmailVerificationService email
         var hash = user?.Hash ?? passwordHashService.DummyHash;
         var passwordMatches = passwordHashService.Verify(hash, loginDto.Password);
         if (user is null || !passwordMatches) throw new BadRequestException(LoginErrorMessage);
-
+        await HttpContext.UserSignOut();
         await HttpContext.UserSignIn(user, loginDto.RememberMe);
         return Ok(new PublicUserDto(user.Id, user.Username, user.Email));
     }
