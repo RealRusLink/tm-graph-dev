@@ -1,0 +1,17 @@
+﻿# @name register
+POST {{host}}/api/User/register
+Content-Type: application/json
+Accept: application/json
+
+{
+  "username": "{{username}}",
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+###
+
+POST {{host}}/api/User/confirm?code={{verificationCode}}
+Accept: application/json
+
+###

@@ -1,0 +1,132 @@
+# Env: dev (http-client.env.json + http-client.private.env.json).
+# First run: copy http-client.private.env.example.json and fill it.
+# Start: dotnet run --launch-profile https
+# After register, put the emailed code into verificationCode, then run confirm.
+# Change username/email (or delete app.db) between runs to avoid 409.
+# Cookies are handled automatically.
+
+
+### 1. Register
+# @name register
+POST {{host}}/api/User/register
+Content-Type: application/json
+Accept: application/json
+
+{
+  "username": "{{username}}",
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("register: 200 OK", function () {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+    });
+%}
+
+
+### 2. Confirm
+# @name confirm
+POST {{host}}/api/User/confirm?code={{verificationCode}}
+Accept: application/json
+
+> {%
+    client.test("confirm: 200 OK", function () {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+    });
+%}
+
+
+### 3. Login by email
+# @name loginByEmail
+POST {{host}}/api/User/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "identifier": "{{email}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login by email: 200 OK", function () {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+    });
+%}
+
+
+### 4. Logout
+# @name logout
+POST {{host}}/api/User/logout
+Accept: application/json
+
+> {%
+    client.test("logout: 200 OK", function () {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+    });
+%}
+
+
+### 5. Login by username
+# @name loginByUsername
+POST {{host}}/api/User/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "identifier": "{{username}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("login by username: 200 OK", function () {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+    });
+%}
+
+
+### 6. Logout
+# @name logoutByUsername
+POST {{host}}/api/User/logout
+Accept: application/json
+
+> {%
+    client.test("logout: 200 OK", function () {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+    });
+%}
+
+
+### 7. Duplicate register: 409
+POST {{host}}/api/User/register
+Content-Type: application/json
+Accept: application/json
+
+{
+  "username": "{{username}}",
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("duplicate register: 409 Conflict", function () {
+        client.assert(response.status === 409, "Expected 409, got " + response.status);
+    });
+%}
+
+
+### 8. Wrong password: 400
+POST {{host}}/api/User/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "identifier": "{{email}}",
+  "password": "wrong-password"
+}
+
+> {%
+    client.test("wrong password: 400 Bad Request", function () {
+        client.assert(response.status === 400, "Expected 400, got " + response.status);
+    });
+%}
