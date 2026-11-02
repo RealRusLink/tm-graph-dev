@@ -158,3 +158,16 @@ Accept: application/json
         client.assert(response.status === 400, "Expected 400, got " + response.status);
     });
 %}
+
+
+### 10. Get current user profile (future /user/me endpoint)
+# @name getMe
+GET {{host}}/api/user/me
+Accept: application/json
+
+> {%
+    client.test("get me: 200 OK or 401", function () {
+        client.assert(response.status === 200 || response.status === 401,
+            "Expected 200 or 401, got " + response.status);
+    });
+%}
