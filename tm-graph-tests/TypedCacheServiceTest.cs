@@ -53,6 +53,54 @@ public class TypedCacheServiceTests
     }
 
     [Fact]
+    public async Task GetValue_ShouldReturnValue_WithoutRemovingIt()
+    {
+        await _cacheService.SetValue("key", "value");
+
+        Assert.Equal("value", await _cacheService.GetValue("key"));
+        Assert.Equal("value", await _cacheService.GetValue("key"));
+        Assert.True(_memoryCache.TryGetValue("key", out _));
+    }
+
+    [Fact]
+    public async Task GetValue_ShouldReturnDefault_WhenKeyDoesNotExist()
+    {
+        Assert.Null(await _cacheService.GetValue("missing-key"));
+    }
+
+    [Fact]
+    public async Task GetValue_ShouldReturnDefault_WhenStoredTypeDoesNotMatch()
+    {
+        ITypedCache<string, int> intCacheService = new TypedCacheService<string, int>(_memoryCache);
+
+        _memoryCache.Set("wrong-type-key", "string-value");
+
+        Assert.Equal(0, await intCacheService.GetValue("wrong-type-key"));
+    }
+
+    [Fact]
+    public async Task KeyExists_ShouldReflectCacheContent()
+    {
+        Assert.False(await _cacheService.KeyExists("key"));
+
+        await _cacheService.SetValue("key", "value");
+        Assert.True(await _cacheService.KeyExists("key"));
+
+        await _cacheService.PopValue("key");
+        Assert.False(await _cacheService.KeyExists("key"));
+    }
+
+    [Fact]
+    public async Task KeyExists_ShouldBeFalse_WhenStoredTypeDoesNotMatch()
+    {
+        ITypedCache<string, int> intCacheService = new TypedCacheService<string, int>(_memoryCache);
+
+        _memoryCache.Set("wrong-type-key", "string-value");
+
+        Assert.False(await intCacheService.KeyExists("wrong-type-key"));
+    }
+
+    [Fact]
     public async Task SetValue_ShouldRespectTtl_WhenExpirationIsSet()
     {
         var key = "ttl-key";
