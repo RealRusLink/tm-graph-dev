@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using tm_graph.Types;
@@ -18,11 +17,14 @@ public class UserControllerTest
     private readonly FakeEmailService _email;
     private readonly EmailVerificationService _verification;
     private readonly PasswordHashService _passwords = new();
+    private readonly FakeAuthenticationService _auth;
     private readonly UserController _controller;
 
     public UserControllerTest()
     {
         (_verification, _email) = TestServices.CreateEmailVerification();
+        var (httpContext, auth) = TestServices.CreateHttpContext();
+        _auth = auth;
         _controller = new UserController(
             _users,
             _verification,
@@ -30,7 +32,7 @@ public class UserControllerTest
             _passwords,
             Options.Create(new EmailVerificationCodeOptions { TtlSeconds = 60 }))
         {
-            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+            ControllerContext = new ControllerContext { HttpContext = httpContext }
         };
     }
 
@@ -97,15 +99,19 @@ public class UserControllerTest
         var result = await _controller.CheckByCode(code);
 
         var ok = Assert.IsType<OkObjectResult>(result);
-        var saved = Assert.IsType<User>(ok.Value);
+        var dto = Assert.IsType<PublicUserDto>(ok.Value);
         var stored = Assert.Single(_users.Users);
 
-        Assert.Same(saved, stored);
+        Assert.Equal("newuser", dto.Username);
+        Assert.Equal("new@example.com", dto.Email);
         Assert.Equal("newuser", stored.Username);
         Assert.Equal("new@example.com", stored.Email);
         Assert.NotEqual("password123", stored.Hash);
         Assert.True(_passwords.Verify(stored.Hash, "password123"));
         Assert.Equal(1, _users.AddCalls);
+
+        var signIn = Assert.Single(_auth.SignIns);
+        Assert.Equal(SessionAuthenticationOptions.SchemeName, signIn.Scheme);
     }
 
     [Fact]
@@ -140,5 +146,6 @@ public class UserControllerTest
 
         await Assert.ThrowsAsync<BadRequestException>(() => _controller.CheckByCode(code));
         Assert.Single(_users.Users);
+        Assert.Single(_auth.SignIns);
     }
 }

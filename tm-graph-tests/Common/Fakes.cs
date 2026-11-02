@@ -1,9 +1,14 @@
+using System.Security.Claims;
 using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using tm_graph.Services;
 using tm_graph.Types;
 using tm_graph_src;
+using tm_graph_src.Exceptions;
 using tm_graph_src.Options;
 using tm_graph_src.Services;
 
@@ -35,6 +40,12 @@ internal sealed class FakeUserStore : IUserStore
 
     public Task<bool> UsernameExistsAsync(string username, CancellationToken cancellationToken = default) =>
         Task.FromResult(Users.Any(u => u.Username == username));
+
+    public Task<User> GetUserByEmail(string email, string errorMessage = "User with this email doesn't exist") =>
+        Task.FromResult(Users.FirstOrDefault(u => u.Email == email) ?? throw new NotFoundException(errorMessage));
+
+    public Task<User> GetUserByUsername(string username, string errorMessage = "User with this username doesn't exist") =>
+        Task.FromResult(Users.FirstOrDefault(u => u.Username == username) ?? throw new NotFoundException(errorMessage));
 
     public Task AddAsync(User user, CancellationToken cancellationToken = default)
     {
@@ -74,9 +85,55 @@ internal sealed class FakeSessionStore : ISessionStore
         Task.FromResult(Sessions.FirstOrDefault(s => s.TokenHash == tokenHash));
 }
 
+internal sealed class FakeAuthenticationService : IAuthenticationService
+{
+    public List<(string? Scheme, ClaimsPrincipal Principal)> SignIns { get; } = new();
+
+    public List<string?> SignOuts { get; } = new();
+
+    public Task<AuthenticateResult> AuthenticateAsync(HttpContext context, string? scheme) =>
+        Task.FromResult(AuthenticateResult.NoResult());
+
+    public Task ChallengeAsync(HttpContext context, string? scheme, AuthenticationProperties? properties) =>
+        Task.CompletedTask;
+
+    public Task ForbidAsync(HttpContext context, string? scheme, AuthenticationProperties? properties) =>
+        Task.CompletedTask;
+
+    public Task SignInAsync(HttpContext context, string? scheme, ClaimsPrincipal principal,
+        AuthenticationProperties? properties)
+    {
+        SignIns.Add((scheme, principal));
+        return Task.CompletedTask;
+    }
+
+    public Task SignOutAsync(HttpContext context, string? scheme, AuthenticationProperties? properties)
+    {
+        SignOuts.Add(scheme);
+        return Task.CompletedTask;
+    }
+}
+
 internal static class TestServices
 {
     private static readonly Regex CodeRegex = new(@"\d+");
+
+    public static (DefaultHttpContext Context, FakeAuthenticationService Auth) CreateHttpContext()
+    {
+        var schemeProvider = new AuthenticationSchemeProvider(
+            Options.Create(new AuthenticationOptions { DefaultScheme = SessionAuthenticationOptions.SchemeName }));
+        schemeProvider.AddScheme(new AuthenticationScheme(
+            SessionAuthenticationOptions.SchemeName,
+            displayName: null,
+            handlerType: typeof(SessionAuthenticationHandler)));
+
+        var auth = new FakeAuthenticationService();
+        var services = new ServiceCollection();
+        services.AddSingleton<IAuthenticationSchemeProvider>(schemeProvider);
+        services.AddSingleton<IAuthenticationService>(auth);
+
+        return (new DefaultHttpContext { RequestServices = services.BuildServiceProvider() }, auth);
+    }
 
     public static (EmailVerificationService Service, FakeEmailService Email) CreateEmailVerification(int ttlSeconds = 60)
     {
