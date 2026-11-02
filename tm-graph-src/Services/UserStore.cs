@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using tm_graph_src.Exceptions;
 
 namespace tm_graph_src.Services;
 
@@ -9,8 +8,10 @@ public interface IUserStore
 
     Task<bool> UsernameExistsAsync(string username, CancellationToken cancellationToken = default);
 
-    Task<User> GetUserByEmail(string email, string errorMessage);
-    Task<User> GetUserByUsername(string username,  string errorMessage);
+    Task<User?> GetUserByEmail(string email, CancellationToken cancellationToken = default);
+
+    Task<User?> GetUserByUsername(string username, CancellationToken cancellationToken = default);
+
     Task AddAsync(User user, CancellationToken cancellationToken = default);
 }
 
@@ -22,16 +23,11 @@ public class UserStore(AppDbContext dbContext) : IUserStore
     public Task<bool> UsernameExistsAsync(string username, CancellationToken cancellationToken = default) =>
         dbContext.Users.AnyAsync(u => u.Username == username, cancellationToken);
 
-    public async Task<User> GetUserByEmail(string email, string errorMessage = "User with this email doesn't exist")
-    {
-        return await dbContext.Users.FirstOrDefaultAsync(u => u.Email == email) ?? throw new NotFoundException(errorMessage);
-    }
-    
-    
-    public async Task<User> GetUserByUsername(string username, string errorMessage = "User with this username doesn't exist")
-    {
-        return await dbContext.Users.FirstOrDefaultAsync(u => u.Username == username) ?? throw new NotFoundException(errorMessage);
-    }
+    public Task<User?> GetUserByEmail(string email, CancellationToken cancellationToken = default) =>
+        dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
+
+    public Task<User?> GetUserByUsername(string username, CancellationToken cancellationToken = default) =>
+        dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Username == username, cancellationToken);
 
     public async Task AddAsync(User user, CancellationToken cancellationToken = default)
     {

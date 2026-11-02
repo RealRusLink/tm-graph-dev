@@ -1,5 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
-using System.Diagnostics.CodeAnalysis;
+using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -10,78 +10,96 @@ using tm_graph_src.Services;
 using tm_graph.Types;
 
 namespace tm_graph_src.Controllers;
+
 [ApiController]
 [Route("api/[controller]")]
 public class AuthController(IUserStore userStore, EmailVerificationService emailVerificationService, UniquenessVerifierService uniquenessVerifierService, PasswordHashService passwordHashService, IOptions<EmailVerificationCodeOptions> options) : ControllerBase
 {
+    public const string RegisterCookieName = "X-Register-Verification-Token";
 
-    private const string _registerCookieName = "X-Register-Verification-Token";
-    
+    private const string ConfirmPath = "/api/auth/confirm";
+    private const string LoginErrorMessage = "Wrong identifier or password";
+
+    private static readonly Regex EmailRegex = new(@"^[^@\s]+@[^@\s]+\.[^@\s]+$");
+    private static readonly Regex UsernameRegex = new(@"^[a-zA-Z0-9_]+$");
+
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] CreateUserDto userDto)
     {
-        await uniquenessVerifierService.UserUnique(userDto, EmailVerificationReason.Registration);
+        var username = userDto.Username.Trim();
+        var email = userDto.Email.Trim().ToLowerInvariant();
+        var normalized = userDto with { Username = username, Email = email };
+
+        await uniquenessVerifierService.UserUnique(normalized, EmailVerificationReason.Registration);
         var user = new User()
         {
-            Username = userDto.Username,
-            Email = userDto.Email,
+            Username = username,
+            Email = email,
             Hash = passwordHashService.Hash(userDto.Password)
         };
         var session = await emailVerificationService.InitiateVerification(user, EmailVerificationReason.Registration);
-        Response.Cookies.Append(_registerCookieName, session, new CookieOptions()
+        Response.Cookies.Append(RegisterCookieName, session, new CookieOptions()
         {
             Expires = DateTimeOffset.UtcNow.AddSeconds(options.Value.TtlSeconds),
             HttpOnly = true,
             Secure = true,
-            SameSite = SameSiteMode.Strict
+            SameSite = SameSiteMode.Strict,
+            Path = ConfirmPath
         });
-        return Ok();
+        return Accepted();
     }
-    
+
     [HttpPost("confirm")]
-    public async Task<IActionResult> CheckByCode([FromQuery] string code)
+    public async Task<IActionResult> Confirm([FromBody] ConfirmDto confirmDto)
     {
-        var session = Request.Cookies[_registerCookieName] ?? "";
-        var user = await emailVerificationService.CompleteVerification(code, session, EmailVerificationReason.Registration);
+        var session = Request.Cookies[RegisterCookieName] ?? "";
+        var user = await emailVerificationService.PeekVerification(
+            confirmDto.Code,
+            session,
+            EmailVerificationReason.Registration);
         if (user is null) throw new BadRequestException();
+
         await userStore.AddAsync(user);
-        await HttpContext.UserSignIn(user);
-        return Ok(new PublicUserDto(user.Username, user.Email));
+        await emailVerificationService.CompleteVerification(
+            confirmDto.Code,
+            session,
+            EmailVerificationReason.Registration);
+        await HttpContext.UserSignIn(user, confirmDto.RememberMe);
+        return Ok(new PublicUserDto(user.Id, user.Username, user.Email));
     }
 
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginDto loginDto)
     {
-        const string errorMessage = "Wrong identifier or password";
-        User user;
-        if (Regex.IsMatch(loginDto.Identifier, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
+        var identifier = loginDto.Identifier.Trim();
+        User? user;
+        if (EmailRegex.IsMatch(identifier))
         {
-            user = await userStore.GetUserByEmail(loginDto.Identifier, errorMessage);
-        } else if (Regex.IsMatch(loginDto.Identifier, @"^[a-zA-Z0-9_]+$"))
+            user = await userStore.GetUserByEmail(identifier.ToLowerInvariant());
+        }
+        else if (UsernameRegex.IsMatch(identifier))
         {
-            user = await userStore.GetUserByUsername(loginDto.Identifier, errorMessage);
+            user = await userStore.GetUserByUsername(identifier);
         }
         else
         {
             throw new BadRequestException("Invalid identifier");
         }
 
-        if (passwordHashService.Verify(user.Hash, loginDto.Password))
-        {
-            await HttpContext.UserSignIn(user);
-            return Ok();
-        } 
-        throw new BadRequestException(errorMessage);
+        var hash = user?.Hash ?? passwordHashService.DummyHash;
+        var passwordMatches = passwordHashService.Verify(hash, loginDto.Password);
+        if (user is null || !passwordMatches) throw new BadRequestException(LoginErrorMessage);
+
+        await HttpContext.UserSignIn(user, loginDto.RememberMe);
+        return Ok(new PublicUserDto(user.Id, user.Username, user.Email));
     }
 
     [HttpPost("logout")]
     public async Task<IActionResult> Logout()
     {
         await HttpContext.UserSignOut();
-        return Ok();
+        return NoContent();
     }
-
-    
 }
 
 public record CreateUserDto(
@@ -107,10 +125,21 @@ public record LoginDto(
     string Identifier,
     [MaxLength(64)]
     [MinLength(8)]
-    string Password
+    string Password,
+    [property: JsonPropertyName("remember_me")]
+    bool RememberMe = false
+);
+
+public record ConfirmDto(
+    [Required]
+    [RegularExpression(@"^[0-9]{12}$", ErrorMessage = "Invalid code")]
+    string Code,
+    [property: JsonPropertyName("remember_me")]
+    bool RememberMe = false
 );
 
 public record PublicUserDto(
+    string Id,
     string Username,
     string Email
     );
