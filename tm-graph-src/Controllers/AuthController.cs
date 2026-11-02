@@ -8,12 +8,13 @@ using tm_graph_src.Extensions;
 using tm_graph_src.Options;
 using tm_graph_src.Services;
 using tm_graph.Types;
+using Microsoft.EntityFrameworkCore;
 
 namespace tm_graph_src.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class AuthController(IUserStore userStore, EmailVerificationService emailVerificationService, UniquenessVerifierService uniquenessVerifierService, PasswordHashService passwordHashService, IOptions<EmailVerificationCodeOptions> options) : ControllerBase
+public class AuthController(IUserStore userStore, AppDbContext appDbContext, EmailVerificationService emailVerificationService, UniquenessVerifierService uniquenessVerifierService, PasswordHashService passwordHashService, IOptions<EmailVerificationCodeOptions> options) : ControllerBase
 {
     public const string RegisterCookieName = "X-Register-Verification-Token";
 
@@ -59,7 +60,9 @@ public class AuthController(IUserStore userStore, EmailVerificationService email
             EmailVerificationReason.Registration);
         if (user is null) throw new BadRequestException();
 
-        await userStore.AddAsync(user);
+        // await userStore.AddAsync(user);
+        await appDbContext.Users.AddAsync(user);
+        await appDbContext.SaveChangesAsync();
         await emailVerificationService.CompleteVerification(
             confirmDto.Code,
             session,
@@ -75,11 +78,13 @@ public class AuthController(IUserStore userStore, EmailVerificationService email
         User? user;
         if (EmailRegex.IsMatch(identifier))
         {
-            user = await userStore.GetUserByEmail(identifier.ToLowerInvariant());
+            // user = await userStore.GetUserByEmail(identifier.ToLowerInvariant());
+            user = await appDbContext.Users.FirstOrDefaultAsync((u) => u.Email == identifier);
         }
         else if (UsernameRegex.IsMatch(identifier))
         {
-            user = await userStore.GetUserByUsername(identifier);
+            user = await appDbContext.Users.FirstOrDefaultAsync((u) => u.Username == identifier);
+            // user = await userStore.GetUserByUsername(identifier);
         }
         else
         {
@@ -89,7 +94,6 @@ public class AuthController(IUserStore userStore, EmailVerificationService email
         var hash = user?.Hash ?? passwordHashService.DummyHash;
         var passwordMatches = passwordHashService.Verify(hash, loginDto.Password);
         if (user is null || !passwordMatches) throw new BadRequestException(LoginErrorMessage);
-        // await HttpContext.UserSignOut();
         await HttpContext.UserSignIn(user, loginDto.RememberMe);
         return Ok(new PublicUserDto(user.Id, user.Username, user.Email));
     }
