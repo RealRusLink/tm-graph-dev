@@ -20,9 +20,6 @@ public class AuthController(IUserStore userStore, EmailVerificationService email
     private const string ConfirmPath = "/api/auth/confirm";
     private const string LoginErrorMessage = "Wrong identifier or password";
 
-    private static readonly Regex EmailRegex = new(@"^[^@\s]+@[^@\s]+\.[^@\s]+$");
-    private static readonly Regex UsernameRegex = new(@"^[a-zA-Z0-9_]+$");
-
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] CreateUserDto userDto)
     {
@@ -73,11 +70,11 @@ public class AuthController(IUserStore userStore, EmailVerificationService email
     {
         var identifier = loginDto.Identifier.Trim();
         User? user;
-        if (EmailRegex.IsMatch(identifier))
+        if (Regex.IsMatch(identifier, RegularExpressions.EmailRegex))
         {
             user = await userStore.GetUserByEmail(identifier.ToLowerInvariant());
         }
-        else if (UsernameRegex.IsMatch(identifier))
+        else if (Regex.IsMatch(identifier, RegularExpressions.UsernameRegex))
         {
             user = await userStore.GetUserByUsername(identifier);
         }
