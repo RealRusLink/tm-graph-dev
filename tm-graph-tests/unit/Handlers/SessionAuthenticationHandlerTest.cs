@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using tm_graph_src;
@@ -11,22 +12,31 @@ using tm_graph_src.Services;
 
 namespace tm_graph_tests;
 
-public class SessionAuthenticationHandlerTest
+public class SessionAuthenticationHandlerTest : IDisposable
 {
-    private readonly FakeSessionStore _store = new();
+    private readonly TestDatabase _database = new();
+    private readonly AppDbContext _db;
+    private readonly IHashService _hash = new HashService();
     private readonly SessionService _sessionService;
     private readonly DefaultHttpContext _httpContext = new();
     private readonly SessionAuthenticationHandler _handler;
 
     public SessionAuthenticationHandlerTest()
     {
-        _sessionService = new SessionService(_store, new HashService());
+        _db = _database.CreateContext();
+        _sessionService = new SessionService(_db, _hash);
         _handler = new SessionAuthenticationHandler(
             _sessionService,
             new StubOptionsMonitor<SessionAuthenticationOptions>(new SessionAuthenticationOptions()),
             Options.Create(new SessionLifetimeOptions()),
             NullLoggerFactory.Instance,
             UrlEncoder.Default);
+    }
+
+    public void Dispose()
+    {
+        _db.Dispose();
+        _database.Dispose();
     }
 
     private sealed class StubOptionsMonitor<T>(T value) : IOptionsMonitor<T>
@@ -50,19 +60,25 @@ public class SessionAuthenticationHandlerTest
         return this;
     }
 
-    private async Task<(User User, string Token)> CreateSessionAsync(string userAgent = "test-agent")
+    private async Task<User> AddUserAsync(string userId = "user-42")
     {
         var user = new User
         {
-            Id = Guid.NewGuid().ToString(),
-            Username = "user",
-            Email = "user@example.com",
+            Id = userId,
+            Username = $"user-{userId}",
+            Email = $"{userId}@example.com",
             Hash = "hash"
         };
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync();
+        return user;
+    }
+
+    private async Task<(User User, string Token)> CreateSessionAsync(string userAgent = "test-agent")
+    {
+        var user = await AddUserAsync();
         var (token, _) = await _sessionService.CreateSession(user.Id, userAgent, TimeSpan.FromDays(1));
 
-        // SessionStore подгружает User через Include, фейк делаем таким же
-        _store.Sessions[^1].User = user;
         return (user, token);
     }
 
@@ -122,7 +138,9 @@ public class SessionAuthenticationHandlerTest
     public async Task Authenticate_ShouldFail_AndDeleteExpiredSession()
     {
         var (_, token) = await CreateSessionAsync();
-        _store.Sessions[^1].ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(-1);
+        var session = await _db.Sessions.SingleAsync();
+        session.ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(-1);
+        await _db.SaveChangesAsync();
         await InitializeAsync();
         SetSessionCookie(token);
         _httpContext.Request.Headers.UserAgent = "test-agent";
@@ -131,7 +149,7 @@ public class SessionAuthenticationHandlerTest
 
         Assert.False(result.Succeeded);
         Assert.Equal("Session expired", result.Failure!.Message);
-        Assert.Empty(_store.Sessions);
+        Assert.False(await _db.Sessions.AnyAsync());
         Assert.Contains("expires=Thu, 01 Jan 1970", SetCookieHeader(_httpContext)!);
     }
 
@@ -148,7 +166,12 @@ public class SessionAuthenticationHandlerTest
         Assert.True(result.Succeeded);
         Assert.Equal(user.Id, result.Principal!.FindFirstValue(ClaimTypes.NameIdentifier));
         Assert.Equal(SessionAuthenticationOptions.SchemeName, result.Principal.Identity!.AuthenticationType);
-        Assert.Same(user, _httpContext.Items[SessionAuthenticationOptions.ContextItemUserKey]);
+
+        var authenticatedUser = Assert.IsType<User>(
+            _httpContext.Items[SessionAuthenticationOptions.ContextItemUserKey]);
+        Assert.Equal(user.Id, authenticatedUser.Id);
+        Assert.Equal(user.Username, authenticatedUser.Username);
+        Assert.Equal(user.Email, authenticatedUser.Email);
     }
 
     [Fact]
@@ -167,6 +190,7 @@ public class SessionAuthenticationHandlerTest
     [Fact]
     public async Task SignIn_ShouldCreateSessionAndSetCookie()
     {
+        await AddUserAsync("user-42");
         await InitializeAsync();
         _httpContext.Request.Headers.UserAgent = "test-agent";
         var principal = new ClaimsPrincipal(new ClaimsIdentity([
@@ -175,13 +199,13 @@ public class SessionAuthenticationHandlerTest
 
         await _handler.SignInAsync(principal, properties: null);
 
-        var session = Assert.Single(_store.Sessions);
+        var session = await _db.Sessions.SingleAsync();
         Assert.Equal("user-42", session.UserId);
         Assert.Equal("test-agent", session.UserAgent);
 
         var cookie = SetCookieHeader(_httpContext)!;
         var token = ExtractToken(cookie);
-        Assert.Equal(new HashService().Hash(token), session.TokenHash);
+        Assert.Equal(_hash.Hash(token), session.TokenHash);
         Assert.Contains("httponly", cookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("secure", cookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("samesite=strict", cookie, StringComparison.OrdinalIgnoreCase);
@@ -190,6 +214,7 @@ public class SessionAuthenticationHandlerTest
     [Fact]
     public async Task SignIn_ShouldUseShortLifetime_WhenNotPersistent()
     {
+        await AddUserAsync("user-42");
         await InitializeAsync();
         _httpContext.Request.Headers.UserAgent = "test-agent";
         var principal = new ClaimsPrincipal(new ClaimsIdentity([
@@ -199,13 +224,14 @@ public class SessionAuthenticationHandlerTest
 
         await _handler.SignInAsync(principal, properties: null);
 
-        var session = Assert.Single(_store.Sessions);
+        var session = await _db.Sessions.SingleAsync();
         Assert.InRange(session.ExpiresAt, before.AddHours(2), DateTimeOffset.UtcNow.AddHours(2));
     }
 
     [Fact]
     public async Task SignIn_ShouldUseLongLifetime_WhenPersistent()
     {
+        await AddUserAsync("user-42");
         await InitializeAsync();
         _httpContext.Request.Headers.UserAgent = "test-agent";
         var principal = new ClaimsPrincipal(new ClaimsIdentity([
@@ -215,7 +241,7 @@ public class SessionAuthenticationHandlerTest
 
         await _handler.SignInAsync(principal, new AuthenticationProperties { IsPersistent = true });
 
-        var session = Assert.Single(_store.Sessions);
+        var session = await _db.Sessions.SingleAsync();
         Assert.InRange(session.ExpiresAt, before.AddDays(30), DateTimeOffset.UtcNow.AddDays(30));
     }
 
@@ -228,7 +254,7 @@ public class SessionAuthenticationHandlerTest
         await Assert.ThrowsAsync<InternalServerErrorException>(
             () => _handler.SignInAsync(principal, properties: null));
 
-        Assert.Empty(_store.Sessions);
+        Assert.False(await _db.Sessions.AnyAsync());
         Assert.Null(SetCookieHeader(_httpContext));
     }
 
@@ -241,7 +267,7 @@ public class SessionAuthenticationHandlerTest
 
         await _handler.SignOutAsync(properties: null);
 
-        Assert.Empty(_store.Sessions);
+        Assert.False(await _db.Sessions.AnyAsync());
         Assert.Contains("expires=Thu, 01 Jan 1970", SetCookieHeader(_httpContext)!);
     }
 }

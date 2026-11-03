@@ -28,62 +28,6 @@ internal sealed class FakeEmailService : IEmailService
     }
 }
 
-internal sealed class FakeUserStore : IUserStore
-{
-    public List<User> Users { get; } = new();
-
-    public int AddCalls { get; private set; }
-
-    public Task<bool> EmailExistsAsync(string email, CancellationToken cancellationToken = default) =>
-        Task.FromResult(Users.Any(u => u.Email == email));
-
-    public Task<bool> UsernameExistsAsync(string username, CancellationToken cancellationToken = default) =>
-        Task.FromResult(Users.Any(u => u.Username == username));
-
-    public Task<User?> GetUserByEmail(string email, CancellationToken cancellationToken = default) =>
-        Task.FromResult(Users.FirstOrDefault(u => u.Email == email));
-
-    public Task<User?> GetUserByUsername(string username, CancellationToken cancellationToken = default) =>
-        Task.FromResult(Users.FirstOrDefault(u => u.Username == username));
-
-    public Task AddAsync(User user, CancellationToken cancellationToken = default)
-    {
-        AddCalls++;
-        Users.Add(user);
-        return Task.CompletedTask;
-    }
-}
-
-internal sealed class FakeSessionStore : ISessionStore
-{
-    public List<Session> Sessions { get; } = new();
-
-    public List<string> RevokedByTokenHash { get; } = new();
-
-    public List<(string UserId, string SessionId)> RevokedById { get; } = new();
-
-    public Task AddAsync(Session session, CancellationToken cancellationToken = default)
-    {
-        Sessions.Add(session);
-        return Task.CompletedTask;
-    }
-
-    public Task<bool> RevokeByTokenHashAsync(string tokenHash, CancellationToken cancellationToken = default)
-    {
-        RevokedByTokenHash.Add(tokenHash);
-        return Task.FromResult(Sessions.RemoveAll(s => s.TokenHash == tokenHash) > 0);
-    }
-
-    public Task<bool> RevokeByIdAsync(string userId, string sessionId, CancellationToken cancellationToken = default)
-    {
-        RevokedById.Add((userId, sessionId));
-        return Task.FromResult(Sessions.RemoveAll(s => s.UserId == userId && s.Id == sessionId) > 0);
-    }
-
-    public Task<Session?> GetSession(string tokenHash) =>
-        Task.FromResult(Sessions.FirstOrDefault(s => s.TokenHash == tokenHash));
-}
-
 internal sealed class FakeAuthenticationService : IAuthenticationService
 {
     public List<(string? Scheme, ClaimsPrincipal Principal, AuthenticationProperties? Properties)> SignIns { get; } = new();

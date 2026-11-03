@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using tm_graph.Types;
 using tm_graph_src;
@@ -9,11 +10,12 @@ using tm_graph_src.Services;
 
 namespace tm_graph_tests;
 
-public class AuthControllerTest
+public class AuthControllerTest : IDisposable
 {
     private const string CookieName = AuthController.RegisterCookieName;
 
-    private readonly FakeUserStore _users = new();
+    private readonly TestDatabase _database = new();
+    private readonly AppDbContext _db;
     private readonly FakeEmailService _email;
     private readonly EmailVerificationService _verification;
     private readonly PasswordHashService _passwords = new();
@@ -22,18 +24,25 @@ public class AuthControllerTest
 
     public AuthControllerTest()
     {
+        _db = _database.CreateContext();
         (_verification, _email) = TestServices.CreateEmailVerification();
         var (httpContext, auth) = TestServices.CreateHttpContext();
         _auth = auth;
         _controller = new AuthController(
-            _users,
+            _db,
             _verification,
-            new UniquenessVerifierService(_users, _verification),
+            new UniquenessVerifierService(_db, _verification),
             _passwords,
             Options.Create(new EmailVerificationCodeOptions { TtlSeconds = 60 }))
         {
             ControllerContext = new ControllerContext { HttpContext = httpContext }
         };
+    }
+
+    public void Dispose()
+    {
+        _db.Dispose();
+        _database.Dispose();
     }
 
     private static CreateUserDto Dto(string username = "newuser", string email = "new@example.com") =>
@@ -66,7 +75,7 @@ public class AuthControllerTest
         SetSessionCookie(SessionFromResponse());
 
         await _controller.Confirm(new ConfirmDto(code, rememberMe));
-        return Assert.Single(_users.Users);
+        return await _db.Users.SingleAsync();
     }
 
     [Fact]
@@ -90,13 +99,25 @@ public class AuthControllerTest
     {
         await _controller.Register(Dto());
 
-        Assert.Empty(_users.Users);
+        Assert.False(await _db.Users.AnyAsync());
     }
 
     [Fact]
     public async Task Register_ShouldThrowConflict_WhenEmailIsTaken()
     {
-        _users.Users.Add(new User { Username = "someone", Email = "new@example.com", Hash = "hash" });
+        _db.Users.Add(new User { Username = "someone", Email = "new@example.com", Hash = "hash" });
+        await _db.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<ConflictException>(() => _controller.Register(Dto()));
+
+        Assert.Empty(_email.Messages);
+    }
+
+    [Fact]
+    public async Task Register_ShouldThrowConflict_WhenUsernameIsTaken()
+    {
+        _db.Users.Add(new User { Username = "newuser", Email = "someone@example.com", Hash = "hash" });
+        await _db.SaveChangesAsync();
 
         await Assert.ThrowsAsync<ConflictException>(() => _controller.Register(Dto()));
 
@@ -112,7 +133,7 @@ public class AuthControllerTest
 
         await _controller.Confirm(new ConfirmDto(code));
 
-        var stored = Assert.Single(_users.Users);
+        var stored = await _db.Users.SingleAsync();
         Assert.Equal("new@example.com", stored.Email);
         Assert.Equal("new@example.com", _email.Messages[0].To);
     }
@@ -128,7 +149,7 @@ public class AuthControllerTest
 
         var ok = Assert.IsType<OkObjectResult>(result);
         var dto = Assert.IsType<PublicUserDto>(ok.Value);
-        var stored = Assert.Single(_users.Users);
+        var stored = await _db.Users.SingleAsync();
 
         Assert.Equal(stored.Id, dto.Id);
         Assert.Equal("newuser", dto.Username);
@@ -137,7 +158,6 @@ public class AuthControllerTest
         Assert.Equal("new@example.com", stored.Email);
         Assert.NotEqual("password123", stored.Hash);
         Assert.True(_passwords.Verify(stored.Hash, "password123"));
-        Assert.Equal(1, _users.AddCalls);
 
         var signIn = Assert.Single(_auth.SignIns);
         Assert.Equal(SessionAuthenticationOptions.SchemeName, signIn.Scheme);
@@ -166,7 +186,7 @@ public class AuthControllerTest
         await Assert.ThrowsAsync<BadRequestException>(
             () => _controller.Confirm(new ConfirmDto("000000000000")));
 
-        Assert.Empty(_users.Users);
+        Assert.False(await _db.Users.AnyAsync());
     }
 
     [Fact]
@@ -177,7 +197,7 @@ public class AuthControllerTest
         await Assert.ThrowsAsync<BadRequestException>(
             () => _controller.Confirm(new ConfirmDto(TestServices.ExtractCode(_email))));
 
-        Assert.Empty(_users.Users);
+        Assert.False(await _db.Users.AnyAsync());
     }
 
     [Fact]
@@ -191,7 +211,7 @@ public class AuthControllerTest
 
         await Assert.ThrowsAsync<BadRequestException>(
             () => _controller.Confirm(new ConfirmDto(code)));
-        Assert.Single(_users.Users);
+        Assert.Single(await _db.Users.ToListAsync());
         Assert.Single(_auth.SignIns);
     }
 
