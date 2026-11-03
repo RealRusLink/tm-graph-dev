@@ -35,9 +35,9 @@ public class SessionService(AppDbContext appDbContext, IHashService hashService)
         await appDbContext.Sessions.Where(s => s.UserId == user.Id && s.Id == sessionId).ExecuteDeleteAsync();
     }
 
-    public async Task<Session?> GetSession(string sessionToken)
+    public async Task<Session?> GetSessionWithUser(string sessionToken)
     {
-        return await appDbContext.Sessions.FirstOrDefaultAsync(s => s.TokenHash == hashService.Hash(sessionToken));
+        return await appDbContext.Sessions.Where(s => s.TokenHash == hashService.Hash(sessionToken)).Select(s => s).Include(s => s.User).AsNoTracking().FirstOrDefaultAsync();
     }
 
 }

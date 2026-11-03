@@ -23,7 +23,7 @@ public class SessionAuthenticationHandler(
     {
         var sessionToken = Request.Cookies[SessionCookieName];
         if (sessionToken is null) return AuthenticateResult.NoResult();
-        var session = await sessionService.GetSession(sessionToken);
+        var session = await sessionService.GetSessionWithUser(sessionToken);
         if (session is null) 
         {
             Response.Cookies.Delete(SessionCookieName);

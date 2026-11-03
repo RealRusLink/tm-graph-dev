@@ -163,7 +163,7 @@ public class SessionServiceTest : IDisposable
         await using var db = _database.CreateContext();
         var (user, token, session) = await CreateSessionAsync(db);
 
-        var found = await new SessionService(db, _hash).GetSession(token);
+        var found = await new SessionService(db, _hash).GetSessionWithUser(token);
 
         Assert.NotNull(found);
         Assert.Equal(session.Id, found.Id);
@@ -183,8 +183,8 @@ public class SessionServiceTest : IDisposable
         var (_, token, _) = await CreateSessionAsync(db);
         var service = new SessionService(db, _hash);
 
-        Assert.NotNull(await service.GetSession(token));
-        Assert.Null(await service.GetSession(token.ToUpperInvariant()));
-        Assert.Null(await service.GetSession("unknown-token"));
+        Assert.NotNull(await service.GetSessionWithUser(token));
+        Assert.Null(await service.GetSessionWithUser(token.ToUpperInvariant()));
+        Assert.Null(await service.GetSessionWithUser("unknown-token"));
     }
 }
