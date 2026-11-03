@@ -72,6 +72,13 @@ public class AuthEndpointsTest : IDisposable
         return user;
     }
 
+    private static string GetCookieValue(HttpResponseMessage response, string cookieName)
+    {
+        var setCookie = response.Headers.GetValues("Set-Cookie")
+            .Single(c => c.StartsWith($"{cookieName}=", StringComparison.Ordinal));
+        return setCookie.Split(';')[0][(cookieName.Length + 1)..];
+    }
+
     private IServiceScope CreateScope() => _factory.Services.CreateScope();
 
     [Fact]
@@ -157,6 +164,23 @@ public class AuthEndpointsTest : IDisposable
     }
 
     [Fact]
+    public async Task Confirm_ShouldBeSingleUse()
+    {
+        await RegisterAsync();
+        var code = TestServices.ExtractCode(_factory.Email);
+
+        var first = await ConfirmAsync(code);
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+
+        var second = await ConfirmAsync(code);
+        Assert.Equal(HttpStatusCode.BadRequest, second.StatusCode);
+
+        using var scope = CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.Equal(1, await db.Users.CountAsync());
+    }
+
+    [Fact]
     public async Task Confirm_ShouldRejectRequestWithoutRegisterCookie()
     {
         using var client = CreateClient(_factory);
@@ -166,6 +190,61 @@ public class AuthEndpointsTest : IDisposable
             new ConfirmRequest("123456789012", false));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RegistrationFlow_ShouldWorkEndToEnd()
+    {
+        var register = await RegisterAsync("flowuser", "Flow@Example.COM");
+        Assert.Equal(HttpStatusCode.Accepted, register.StatusCode);
+
+        var message = Assert.Single(_factory.Email.Messages);
+        Assert.Equal("flow@example.com", message.To);
+
+        var code = TestServices.ExtractCode(_factory.Email);
+        var confirm = await ConfirmAsync(code);
+        Assert.Equal(HttpStatusCode.OK, confirm.StatusCode);
+
+        var confirmed = await ReadUserAsync(confirm);
+        Assert.Equal("flowuser", confirmed.Username);
+        Assert.Equal("flow@example.com", confirmed.Email);
+        Assert.False(string.IsNullOrWhiteSpace(
+            GetCookieValue(confirm, SessionAuthenticationHandler.SessionCookieName)));
+
+        using (var scope = CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var user = await db.Users.SingleAsync();
+            Assert.Equal(confirmed.Id, user.Id);
+            Assert.True(new PasswordHashService().Verify(user.Hash, Password));
+            Assert.Equal(1, await db.Sessions.CountAsync());
+        }
+
+        var logout = await _client.PostAsync("/api/auth/logout", content: null);
+        Assert.Equal(HttpStatusCode.NoContent, logout.StatusCode);
+
+        using (var scope = CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(1, await db.Users.CountAsync());
+            Assert.Equal(0, await db.Sessions.CountAsync());
+        }
+
+        var login = await _client.PostAsJsonAsync(
+            "/api/auth/login",
+            new LoginRequest("FLOW@EXAMPLE.COM", Password, false));
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+
+        var loggedIn = await ReadUserAsync(login);
+        Assert.Equal(confirmed.Id, loggedIn.Id);
+        Assert.Equal(confirmed.Username, loggedIn.Username);
+        Assert.Equal(confirmed.Email, loggedIn.Email);
+
+        using (var scope = CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(1, await db.Sessions.CountAsync());
+        }
     }
 
     [Fact]
@@ -204,6 +283,22 @@ public class AuthEndpointsTest : IDisposable
         var user = await ReadUserAsync(response);
         Assert.Equal(registered.Id, user.Id);
         Assert.Equal(registered.Username, user.Username);
+        Assert.Equal(registered.Email, user.Email);
+    }
+
+    [Fact]
+    public async Task Login_ShouldAcceptEmailInDifferentCase()
+    {
+        var registered = await RegisterAndConfirmAsync();
+        using var client = CreateClient(_factory);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/auth/login",
+            new LoginRequest(" New@Example.COM ", Password, false));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var user = await ReadUserAsync(response);
+        Assert.Equal(registered.Id, user.Id);
         Assert.Equal(registered.Email, user.Email);
     }
 
@@ -248,6 +343,62 @@ public class AuthEndpointsTest : IDisposable
     }
 
     [Fact]
+    public async Task Login_ShouldRejectMalformedIdentifier()
+    {
+        var response = await LoginAsync("not an email or username");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("Invalid identifier", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Login_ShouldReplaceExistingSession()
+    {
+        await RegisterAndConfirmAsync();
+
+        string oldTokenHash;
+        using (var scope = CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            oldTokenHash = (await db.Sessions.SingleAsync()).TokenHash;
+        }
+
+        var response = await LoginAsync("new@example.com");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var newToken = GetCookieValue(response, SessionAuthenticationHandler.SessionCookieName);
+        var newTokenHash = new HashService().Hash(newToken);
+
+        using (var scope = CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var session = await db.Sessions.SingleAsync();
+            Assert.Equal(newTokenHash, session.TokenHash);
+            Assert.NotEqual(oldTokenHash, session.TokenHash);
+        }
+    }
+
+    [Fact]
+    public async Task Login_ShouldUseLongSessionLifetime_WhenRememberMeIsTrue()
+    {
+        await RegisterAndConfirmAsync();
+        using var client = CreateClient(_factory);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/auth/login",
+            new LoginRequest("new@example.com", Password, true));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var token = GetCookieValue(response, SessionAuthenticationHandler.SessionCookieName);
+        var tokenHash = new HashService().Hash(token);
+
+        using var scope = CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var session = await db.Sessions.SingleAsync(s => s.TokenHash == tokenHash);
+        Assert.True(session.ExpiresAt > DateTimeOffset.UtcNow.AddDays(29));
+    }
+
+    [Fact]
     public async Task Logout_ShouldRevokeSession()
     {
         await RegisterAndConfirmAsync();
@@ -277,6 +428,33 @@ public class AuthEndpointsTest : IDisposable
         var response = await client.PostAsync("/api/auth/logout", content: null);
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Logout_ShouldRemoveExpiredSession_AndDeleteCookie()
+    {
+        await RegisterAndConfirmAsync();
+
+        using (var scope = CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var session = await db.Sessions.SingleAsync();
+            session.ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+            await db.SaveChangesAsync();
+        }
+
+        var response = await _client.PostAsync("/api/auth/logout", content: null);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Contains(response.Headers.GetValues("Set-Cookie"), cookie =>
+            cookie.Contains(SessionAuthenticationHandler.SessionCookieName) &&
+            cookie.Contains("expires=Thu, 01 Jan 1970"));
+
+        using (var scope = CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(0, await db.Sessions.CountAsync());
+        }
     }
 
     [Fact]
