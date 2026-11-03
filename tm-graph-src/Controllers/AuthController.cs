@@ -76,7 +76,7 @@ public class AuthController(AppDbContext appDbContext, EmailVerificationService 
         User? user;
         if (EmailRegex.IsMatch(identifier))
         {
-            user = await appDbContext.Users.FirstOrDefaultAsync((u) => u.Email == identifier);
+            user = await appDbContext.Users.FirstOrDefaultAsync((u) => u.Email == identifier.ToLowerInvariant());
         }
         else if (UsernameRegex.IsMatch(identifier))
         {
